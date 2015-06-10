@@ -5465,12 +5465,10 @@ func DecodeMemory(data []uint8) ([]uint8, error) {
 
 	out := &bytes.Buffer{}
 	p += used
-all:
 	for {
 		n := C.int(0)
 		outputs := (**C.float)(nil)
 		num_c := C.int(0)
-
 		q = 32
 		for {
 			if q > C.int(len(data)) - p {
@@ -5484,7 +5482,7 @@ all:
 			if used == 0 {
 				if p + q == C.int(len(data)) {
 					// no more data, stop
-					break all
+					return out.Bytes(), nil
 				}
 				if q < 128 {
 					q = 128
@@ -5495,7 +5493,10 @@ all:
 			p += used
 			if n == 0 {
 				// seek/error recovery
-				continue all
+				outputs = nil
+				num_c = 0
+				q = 32
+				continue
 			}
 			break
 		}
