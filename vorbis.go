@@ -14,6 +14,15 @@
 
 package vorbis
 
+import (
+	"bytes"
+	"fmt"
+	"encoding/binary"
+	"math"
+	"reflect"
+	"unsafe"
+)
+
 /*
 
 // Copied from stb_vorbis.c (github.com/nothings/stb)
@@ -5418,5 +5427,91 @@ int stb_vorbis_get_samples_float(stb_vorbis *f, int channels, float **buffer, in
 #endif // STB_VORBIS_NO_PULLDATA_API
 
 #endif // STB_VORBIS_HEADER_ONLY
+
+float* floatPPIndex(float** p, int i) {
+   return p[i];
+}
 */
 import "C"
+
+// WIP: API is changing all the time.
+func DecodeMemory(data []uint8) ([]uint8, error) {
+	p := C.int(0)
+	q := C.int(1)
+	error := C.int(0)
+	used := C.int(0)
+
+retry:
+	v := C.stb_vorbis_open_pushdata((*C.uchar)(&data[0]), (C.int)(q), &used, &error, nil)
+	if v == nil {
+		if error == C.VORBIS_need_more_data {
+			q++
+			goto retry
+		}
+		return nil, fmt.Errorf("go-vorbis: Error %d\n", error)
+	}
+	defer C.stb_vorbis_close(v)
+
+	// show_info(v)
+
+	out := &bytes.Buffer{}
+	p += used
+	for {
+		n := C.int(0)
+		outputs := (**C.float)(nil)
+		num_c := C.int(0)
+
+		q = 32
+	retry3:
+		if q > C.int(len(data)) - p {
+			q = C.int(len(data)) - p
+		}
+		d := (*C.uchar)(nil)
+		if p < C.int(len(data)) {
+			d = (*C.uchar)(&data[p])
+		}
+		used = C.stb_vorbis_decode_frame_pushdata(v, d, q, &num_c, &outputs, &n)
+		if used == 0 {
+			if p + q == C.int(len(data)) {
+				// no more data, stop
+				break
+			}
+			if q < 128 {
+				q = 128
+			}
+			q *= 2
+			goto retry3
+		}
+		p += used
+		if n == 0 {
+			// seek/error recovery
+			continue
+		}
+
+		left := C.floatPPIndex(outputs, 0)
+		right := (*C.float)(nil)
+		if num_c > 1 {
+			right = C.floatPPIndex(outputs, 1)
+		} else {
+			right = C.floatPPIndex(outputs, 0)
+		}
+		lh := reflect.SliceHeader{
+			Data: uintptr(unsafe.Pointer(left)),
+			Len:  int(n),
+			Cap:  int(n),
+		}
+		rh := reflect.SliceHeader{
+			Data: uintptr(unsafe.Pointer(right)),
+			Len:  int(n),
+			Cap:  int(n),
+		}
+		l := *(*[]float32)(unsafe.Pointer(&lh))
+		r := *(*[]float32)(unsafe.Pointer(&rh))
+		for i := 0; i < int(n); i++ {
+			l := int16(l[i] * math.MaxInt16)
+			r := int16(r[i] * math.MaxInt16)
+			binary.Write(out, binary.LittleEndian, []int16{l, r})
+		}
+	}
+	return out.Bytes(), nil
+}
