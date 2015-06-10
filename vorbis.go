@@ -5448,7 +5448,13 @@ func DecodeMemory(data []uint8) ([]uint8, error) {
 			break
 		}
 		if error == C.VORBIS_need_more_data {
-			q++
+			if q == C.int(len(data)) {
+				return nil, fmt.Errorf("go-vorbis: invalid header")
+			}
+			q *= 2
+			if C.int(len(data)) < q {
+				q = C.int(len(data))
+			}
 			continue
 		}
 		return nil, fmt.Errorf("go-vorbis: Error %d\n", error)
