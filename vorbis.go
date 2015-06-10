@@ -5441,12 +5441,15 @@ func DecodeMemory(data []uint8) ([]uint8, error) {
 	error := C.int(0)
 	used := C.int(0)
 
-retry:
-	v := C.stb_vorbis_open_pushdata((*C.uchar)(&data[0]), (C.int)(q), &used, &error, nil)
-	if v == nil {
+	v := (*C.stb_vorbis)(nil)
+	for v == nil {
+		v = C.stb_vorbis_open_pushdata((*C.uchar)(&data[0]), q, &used, &error, nil)
+		if v != nil {
+			break
+		}
 		if error == C.VORBIS_need_more_data {
 			q++
-			goto retry
+			continue
 		}
 		return nil, fmt.Errorf("go-vorbis: Error %d\n", error)
 	}
@@ -5456,38 +5459,41 @@ retry:
 
 	out := &bytes.Buffer{}
 	p += used
+all:
 	for {
 		n := C.int(0)
 		outputs := (**C.float)(nil)
 		num_c := C.int(0)
 
 		q = 32
-	retry3:
-		if q > C.int(len(data)) - p {
-			q = C.int(len(data)) - p
-		}
-		d := (*C.uchar)(nil)
-		if p < C.int(len(data)) {
-			d = (*C.uchar)(&data[p])
-		}
-		used = C.stb_vorbis_decode_frame_pushdata(v, d, q, &num_c, &outputs, &n)
-		if used == 0 {
-			if p + q == C.int(len(data)) {
-				// no more data, stop
-				break
+		for {
+			if q > C.int(len(data)) - p {
+				q = C.int(len(data)) - p
 			}
-			if q < 128 {
-				q = 128
+			d := (*C.uchar)(nil)
+			if p < C.int(len(data)) {
+				d = (*C.uchar)(&data[p])
 			}
-			q *= 2
-			goto retry3
+			used = C.stb_vorbis_decode_frame_pushdata(v, d, q, &num_c, &outputs, &n)
+			if used == 0 {
+				if p + q == C.int(len(data)) {
+					// no more data, stop
+					break all
+				}
+				if q < 128 {
+					q = 128
+				}
+				q *= 2
+				continue
+			}
+			p += used
+			if n == 0 {
+				// seek/error recovery
+				continue all
+			}
+			break
 		}
-		p += used
-		if n == 0 {
-			// seek/error recovery
-			continue
-		}
-
+			
 		left := C.floatPPIndex(outputs, 0)
 		right := (*C.float)(nil)
 		if num_c > 1 {
