@@ -5434,17 +5434,27 @@ float* floatPPIndex(float** p, int i) {
 */
 import "C"
 
+func cFloatsToSlice(p *C.float, n int) []float32 {
+	s := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(p)),
+		Len:  n,
+		Cap:  n,
+	}
+	return *(*[]float32)(unsafe.Pointer(&s))
+}
+
 // WIP: API is changing all the time.
-func DecodeMemory(data []uint8) ([]uint8, error) {
+func DecodeMemory(data []byte) ([]byte, error) {
 	p := C.int(0)
 	q := C.int(1)
-	error := C.int(0)
-	used := C.int(0)
 
 	v := (*C.stb_vorbis)(nil)
-	for v == nil {
+	for {
+		used := C.int(0)
+		error := C.int(0)
 		v = C.stb_vorbis_open_pushdata((*C.uchar)(&data[0]), q, &used, &error, nil)
 		if v != nil {
+			p += used
 			break
 		}
 		if error == C.VORBIS_need_more_data {
@@ -5461,70 +5471,53 @@ func DecodeMemory(data []uint8) ([]uint8, error) {
 	}
 	defer C.stb_vorbis_close(v)
 
-	// show_info(v)
-
 	out := &bytes.Buffer{}
-	p += used
+	q = C.int(32)
 	for {
 		n := C.int(0)
 		outputs := (**C.float)(nil)
-		num_c := C.int(0)
+		numCh := C.int(0)
+		if q > C.int(len(data))-p {
+			q = C.int(len(data)) - p
+		}
+		if q == 0 {
+			return out.Bytes(), nil
+		}
+		d := (*C.uchar)(&data[p])
+		used := C.stb_vorbis_decode_frame_pushdata(v, d, q, &numCh, &outputs, &n)
+		if used == 0 {
+			if p+q == C.int(len(data)) {
+				// no more data, stop
+				return out.Bytes(), nil
+			}
+			if q < 128 {
+				q = 128
+			}
+			q *= 2
+			continue
+		}
+		p += used
+
 		q = 32
-		for {
-			if q > C.int(len(data))-p {
-				q = C.int(len(data)) - p
-			}
-			d := (*C.uchar)(nil)
-			if p < C.int(len(data)) {
-				d = (*C.uchar)(&data[p])
-			}
-			used = C.stb_vorbis_decode_frame_pushdata(v, d, q, &num_c, &outputs, &n)
-			if used == 0 {
-				if p+q == C.int(len(data)) {
-					// no more data, stop
-					return out.Bytes(), nil
-				}
-				if q < 128 {
-					q = 128
-				}
-				q *= 2
-				continue
-			}
-			p += used
-			if n == 0 {
-				// seek/error recovery
-				outputs = nil
-				num_c = 0
-				q = 32
-				continue
-			}
-			break
+		if n == 0 {
+			// seek/error recovery
+			continue
 		}
 
 		left := C.floatPPIndex(outputs, 0)
 		right := (*C.float)(nil)
-		if num_c > 1 {
+		if numCh > 1 {
 			right = C.floatPPIndex(outputs, 1)
 		} else {
 			right = C.floatPPIndex(outputs, 0)
 		}
-		lh := reflect.SliceHeader{
-			Data: uintptr(unsafe.Pointer(left)),
-			Len:  int(n),
-			Cap:  int(n),
-		}
-		rh := reflect.SliceHeader{
-			Data: uintptr(unsafe.Pointer(right)),
-			Len:  int(n),
-			Cap:  int(n),
-		}
-		l := *(*[]float32)(unsafe.Pointer(&lh))
-		r := *(*[]float32)(unsafe.Pointer(&rh))
+		l := cFloatsToSlice(left, int(n))
+		r := cFloatsToSlice(right, int(n))
 		for i := 0; i < int(n); i++ {
 			l := int16(l[i] * math.MaxInt16)
 			r := int16(r[i] * math.MaxInt16)
 			binary.Write(out, binary.LittleEndian, []int16{l, r})
 		}
 	}
-	return out.Bytes(), nil
+	panic("not reach")
 }
