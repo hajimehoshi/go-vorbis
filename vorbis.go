@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"unsafe"
@@ -5444,73 +5445,70 @@ func cFloatsToSlice(p *C.float, n int) []float32 {
 }
 
 // WIP: API is changing all the time.
-func DecodeMemory(data []byte) ([]byte, error) {
-	q := C.int(0)
+func Decode(in io.Reader) ([]byte, error) {
 	v := (*C.stb_vorbis)(nil)
+	buf := []byte{}
 	for {
 		used := C.int(0)
 		error := C.int(0)
-		q += 32
-		if C.int(len(data)) < q {
-			q = C.int(len(data))
+		tmp := make([]byte, 32)
+		n, err := in.Read(tmp)
+		if 0 < n {
+			buf = append(buf, tmp[:n]...)
+			v = C.stb_vorbis_open_pushdata((*C.uchar)(&buf[0]), C.int(len(buf)), &used, &error, nil)
+			if v != nil {
+				buf = buf[used:]
+			} else if error == C.VORBIS_need_more_data {
+				continue
+			} else {
+				return nil, fmt.Errorf("go-vorbis: Error %d", error)
+			}
 		}
-		v = C.stb_vorbis_open_pushdata((*C.uchar)(&data[0]), q, &used, &error, nil)
-		if v != nil {
-			data = data[used:]
+		if err == io.EOF {
 			break
 		}
-		if error == C.VORBIS_need_more_data {
-			if q == C.int(len(data)) {
-				return nil, fmt.Errorf("go-vorbis: invalid header")
-			}
-			continue
+		if err != nil {
+			return nil, err
 		}
-		return nil, fmt.Errorf("go-vorbis: Error %d\n", error)
+		break
 	}
 	defer C.stb_vorbis_close(v)
 
 	out := &bytes.Buffer{}
-	q = 0
 	for {
-		if len(data) == 0 {
-			break
-		}
-
-		n := C.int(0)
+		ns := C.int(0)
 		outputs := (**C.float)(nil)
 		numCh := C.int(0)
-		q += 32
-		if C.int(len(data)) < q {
-			q = C.int(len(data))
-		}
-		d := (*C.uchar)(&data[0])
-		used := C.stb_vorbis_decode_frame_pushdata(v, d, q, &numCh, &outputs, &n)
-		if used == 0 {
-			if q == C.int(len(data)) {
-				// no more data, stop
-				break
+		tmp := make([]byte, 32)
+		n, err := in.Read(tmp)
+		if 0 < n {
+			buf = append(buf, tmp[:n]...)
+			used := C.stb_vorbis_decode_frame_pushdata(v, (*C.uchar)(&buf[0]), C.int(len(buf)), &numCh, &outputs, &ns)
+			buf = buf[used:]
+			if 0 < used {
+				if ns == 0 {
+					// seek/error recovery
+					continue
+				}
+				left := C.floatPPIndex(outputs, 0)
+				right := C.floatPPIndex(outputs, 0)
+				if numCh > 1 {
+					right = C.floatPPIndex(outputs, 1)
+				}
+				l := cFloatsToSlice(left, int(ns))
+				r := cFloatsToSlice(right, int(ns))
+				for i := 0; i < int(ns); i++ {
+					l := int16(l[i] * math.MaxInt16)
+					r := int16(r[i] * math.MaxInt16)
+					binary.Write(out, binary.LittleEndian, []int16{l, r})
+				}
 			}
-			continue
 		}
-		data = data[used:]
-
-		q = 0
-		if n == 0 {
-			// seek/error recovery
-			continue
+		if err == io.EOF {
+			break
 		}
-
-		left := C.floatPPIndex(outputs, 0)
-		right := C.floatPPIndex(outputs, 0)
-		if numCh > 1 {
-			right = C.floatPPIndex(outputs, 1)
-		}
-		l := cFloatsToSlice(left, int(n))
-		r := cFloatsToSlice(right, int(n))
-		for i := 0; i < int(n); i++ {
-			l := int16(l[i] * math.MaxInt16)
-			r := int16(r[i] * math.MaxInt16)
-			binary.Write(out, binary.LittleEndian, []int16{l, r})
+		if err != nil {
+			return nil, err
 		}
 	}
 	return out.Bytes(), nil
