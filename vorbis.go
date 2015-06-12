@@ -5496,8 +5496,10 @@ func (d *decoder) Read(out []byte) (int, error) {
 				d.outbuf = append(d.outbuf, out.Bytes()...)
 			}
 		}
-		if err == io.EOF || d.ineof {
+		if err == io.EOF {
 			d.ineof = true
+		}
+		if d.ineof {
 			if len(d.inbuf) == 0 {
 				break
 			}
@@ -5525,7 +5527,8 @@ func (d *decoder) Close() error {
 	return nil
 }
 
-// WIP: API is changing all the time.
+// Decode accepts an ogg stream and returns a decorded stream.
+// The decorded format is 2-channel interleaved littleendian int16 values.
 func Decode(in io.Reader) (io.ReadCloser, error) {
 	v := (*C.stb_vorbis)(nil)
 	buf := []byte{}
