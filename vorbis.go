@@ -5445,11 +5445,12 @@ func cFloatsToSlice(p *C.float, n int) []float32 {
 
 // WIP: API is changing all the time.
 func DecodeMemory(data []byte) ([]byte, error) {
-	q := C.int(32)
+	q := C.int(0)
 	v := (*C.stb_vorbis)(nil)
 	for {
 		used := C.int(0)
 		error := C.int(0)
+		q += 32
 		if C.int(len(data)) < q {
 			q = C.int(len(data))
 		}
@@ -5462,7 +5463,6 @@ func DecodeMemory(data []byte) ([]byte, error) {
 			if q == C.int(len(data)) {
 				return nil, fmt.Errorf("go-vorbis: invalid header")
 			}
-			q += 32
 			continue
 		}
 		return nil, fmt.Errorf("go-vorbis: Error %d\n", error)
@@ -5470,7 +5470,7 @@ func DecodeMemory(data []byte) ([]byte, error) {
 	defer C.stb_vorbis_close(v)
 
 	out := &bytes.Buffer{}
-	q = 32
+	q = 0
 	for {
 		if len(data) == 0 {
 			break
@@ -5479,6 +5479,7 @@ func DecodeMemory(data []byte) ([]byte, error) {
 		n := C.int(0)
 		outputs := (**C.float)(nil)
 		numCh := C.int(0)
+		q += 32
 		if C.int(len(data)) < q {
 			q = C.int(len(data))
 		}
@@ -5489,12 +5490,11 @@ func DecodeMemory(data []byte) ([]byte, error) {
 				// no more data, stop
 				break
 			}
-			q += 32
 			continue
 		}
 		data = data[used:]
 
-		q = 32
+		q = 0
 		if n == 0 {
 			// seek/error recovery
 			continue
