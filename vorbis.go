@@ -17,6 +17,7 @@ package vorbis
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -5456,7 +5457,7 @@ type decoder struct {
 const bufferSize = 4096
 
 func (d *decoder) Read(out []byte) (int, error) {
-	for len(d.outbuf) < len(out) {
+	if len(d.outbuf) < len(out) {
 		ns := C.int(0)
 		outputs := (**C.float)(nil)
 		numCh := C.int(0)
@@ -5475,8 +5476,8 @@ func (d *decoder) Read(out []byte) (int, error) {
 			d.inbuf = d.inbuf[used:]
 			if 0 < used {
 				if ns == 0 {
-					// seek/error recovery
-					continue
+					// seek/error
+					return 0, nil
 				}
 				left := C.floatPPIndex(outputs, 0)
 				right := C.floatPPIndex(outputs, 0)
@@ -5496,17 +5497,11 @@ func (d *decoder) Read(out []byte) (int, error) {
 				d.outbuf = append(d.outbuf, out.Bytes()...)
 			}
 		}
-		if err == io.EOF {
-			d.ineof = true
-		}
-		if d.ineof {
-			if len(d.inbuf) == 0 {
-				break
-			}
-			continue
-		}
 		if err != nil {
-			return 0, err
+			if err != io.EOF {
+				return 0, err
+			}
+			d.ineof = true
 		}
 	}
 	copy(out, d.outbuf)
@@ -5530,23 +5525,28 @@ func (d *decoder) Close() error {
 // Decode accepts an ogg stream and returns a decorded stream.
 // The decorded format is 2-channel interleaved littleendian int16 values.
 func Decode(in io.Reader) (io.ReadCloser, error) {
-	v := (*C.stb_vorbis)(nil)
-	buf := []byte{}
+	d := &decoder{
+		in:     in,
+		inbuf:  []byte{},
+		outbuf: []byte{},
+	}
+	runtime.SetFinalizer(d, (*decoder).Close)
 	for {
 		used := C.int(0)
 		error := C.int(0)
 		tmp := make([]byte, bufferSize)
 		n, err := in.Read(tmp)
 		if 0 < n {
-			buf = append(buf, tmp[:n]...)
-			v = C.stb_vorbis_open_pushdata((*C.uchar)(&buf[0]), C.int(len(buf)), &used, &error, nil)
-			if v != nil {
-				buf = buf[used:]
-			} else if error == C.VORBIS_need_more_data {
-				continue
-			} else {
-				return nil, fmt.Errorf("go-vorbis: Error %d", error)
+			d.inbuf = append(d.inbuf, tmp[:n]...)
+			d.v = C.stb_vorbis_open_pushdata((*C.uchar)(&d.inbuf[0]), C.int(len(d.inbuf)), &used, &error, nil)
+			if d.v != nil {
+				d.inbuf = d.inbuf[used:]
+				break
 			}
+			if error == C.VORBIS_need_more_data {
+				continue
+			}
+			return nil, fmt.Errorf("go-vorbis: Error %d", error)
 		}
 		if err == io.EOF {
 			break
@@ -5554,14 +5554,9 @@ func Decode(in io.Reader) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		break
 	}
-	d := &decoder{
-		v:      v,
-		in:     in,
-		inbuf:  buf,
-		outbuf: []byte{},
+	if d.v == nil {
+		return nil, errors.New("go-vorbis: initializing failed")
 	}
-	runtime.SetFinalizer(d, (*decoder).Close)
 	return d, nil
 }
