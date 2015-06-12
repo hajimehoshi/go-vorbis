@@ -5445,26 +5445,24 @@ func cFloatsToSlice(p *C.float, n int) []float32 {
 
 // WIP: API is changing all the time.
 func DecodeMemory(data []byte) ([]byte, error) {
-	p := C.int(0)
-	q := C.int(1)
-
+	q := C.int(32)
 	v := (*C.stb_vorbis)(nil)
 	for {
 		used := C.int(0)
 		error := C.int(0)
+		if C.int(len(data)) < q {
+			q = C.int(len(data))
+		}
 		v = C.stb_vorbis_open_pushdata((*C.uchar)(&data[0]), q, &used, &error, nil)
 		if v != nil {
-			p += used
+			data = data[used:]
 			break
 		}
 		if error == C.VORBIS_need_more_data {
 			if q == C.int(len(data)) {
 				return nil, fmt.Errorf("go-vorbis: invalid header")
 			}
-			q *= 2
-			if C.int(len(data)) < q {
-				q = C.int(len(data))
-			}
+			q += 32
 			continue
 		}
 		return nil, fmt.Errorf("go-vorbis: Error %d\n", error)
@@ -5472,31 +5470,29 @@ func DecodeMemory(data []byte) ([]byte, error) {
 	defer C.stb_vorbis_close(v)
 
 	out := &bytes.Buffer{}
-	q = C.int(32)
+	q = 32
 	for {
+		if len(data) == 0 {
+			break
+		}
+
 		n := C.int(0)
 		outputs := (**C.float)(nil)
 		numCh := C.int(0)
-		if q > C.int(len(data))-p {
-			q = C.int(len(data)) - p
+		if C.int(len(data)) < q {
+			q = C.int(len(data))
 		}
-		if q == 0 {
-			return out.Bytes(), nil
-		}
-		d := (*C.uchar)(&data[p])
+		d := (*C.uchar)(&data[0])
 		used := C.stb_vorbis_decode_frame_pushdata(v, d, q, &numCh, &outputs, &n)
 		if used == 0 {
-			if p+q == C.int(len(data)) {
+			if q == C.int(len(data)) {
 				// no more data, stop
-				return out.Bytes(), nil
+				break
 			}
-			if q < 128 {
-				q = 128
-			}
-			q *= 2
+			q += 32
 			continue
 		}
-		p += used
+		data = data[used:]
 
 		q = 32
 		if n == 0 {
@@ -5505,11 +5501,9 @@ func DecodeMemory(data []byte) ([]byte, error) {
 		}
 
 		left := C.floatPPIndex(outputs, 0)
-		right := (*C.float)(nil)
+		right := C.floatPPIndex(outputs, 0)
 		if numCh > 1 {
 			right = C.floatPPIndex(outputs, 1)
-		} else {
-			right = C.floatPPIndex(outputs, 0)
 		}
 		l := cFloatsToSlice(left, int(n))
 		r := cFloatsToSlice(right, int(n))
@@ -5519,5 +5513,5 @@ func DecodeMemory(data []byte) ([]byte, error) {
 			binary.Write(out, binary.LittleEndian, []int16{l, r})
 		}
 	}
-	panic("not reach")
+	return out.Bytes(), nil
 }
