@@ -5450,21 +5450,27 @@ type decoder struct {
 	in     io.Reader
 	inbuf  []byte
 	outbuf []byte
-	eof    bool
+	ineof  bool
 }
 
+const bufferSize = 4096
+
 func (d *decoder) Read(out []byte) (int, error) {
-	if d.v == nil {
-		return 0, io.EOF
-	}
 	for len(d.outbuf) < len(out) {
 		ns := C.int(0)
 		outputs := (**C.float)(nil)
 		numCh := C.int(0)
-		tmp := make([]byte, 32)
-		n, err := d.in.Read(tmp)
+		var tmp []byte
+		var err error
+		n := 0
+		if !d.ineof {
+			tmp = make([]byte, bufferSize)
+			n, err = d.in.Read(tmp)
+		}
 		if 0 < n {
 			d.inbuf = append(d.inbuf, tmp[:n]...)
+		}
+		if 0 < len(d.inbuf) {
 			used := C.stb_vorbis_decode_frame_pushdata(d.v, (*C.uchar)(&d.inbuf[0]), C.int(len(d.inbuf)), &numCh, &outputs, &ns)
 			d.inbuf = d.inbuf[used:]
 			if 0 < used {
@@ -5490,9 +5496,12 @@ func (d *decoder) Read(out []byte) (int, error) {
 				d.outbuf = append(d.outbuf, out.Bytes()...)
 			}
 		}
-		if err == io.EOF {
-			d.eof = true
-			break
+		if err == io.EOF || d.ineof {
+			d.ineof = true
+			if len(d.inbuf) == 0 {
+				break
+			}
+			continue
 		}
 		if err != nil {
 			return 0, err
@@ -5504,7 +5513,7 @@ func (d *decoder) Read(out []byte) (int, error) {
 		nread = len(out)
 	}
 	d.outbuf = d.outbuf[nread:]
-	if !d.eof {
+	if !d.ineof || 0 < len(d.inbuf) {
 		return nread, nil
 	}
 	return nread, io.EOF
@@ -5523,7 +5532,7 @@ func Decode(in io.Reader) (io.ReadCloser, error) {
 	for {
 		used := C.int(0)
 		error := C.int(0)
-		tmp := make([]byte, 32)
+		tmp := make([]byte, bufferSize)
 		n, err := in.Read(tmp)
 		if 0 < n {
 			buf = append(buf, tmp[:n]...)
