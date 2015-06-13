@@ -5426,63 +5426,52 @@ type decoder struct {
 const bufferSize = 4096
 
 func (d *decoder) Read(out []byte) (int, error) {
-	if len(d.outbuf) < len(out) {
-		ns := C.int(0)
-		outputs := (**C.float)(nil)
-		numCh := C.int(0)
-		var tmp []byte
-		var err error
-		n := 0
-		if !d.ineof {
-			tmp = make([]byte, bufferSize)
-			n, err = d.in.Read(tmp)
-		}
-		if 0 < n {
-			d.inbuf = append(d.inbuf, tmp[:n]...)
-		}
-		if 0 < len(d.inbuf) {
-			used := C.stb_vorbis_decode_frame_pushdata(d.v, (*C.uchar)(&d.inbuf[0]), C.int(len(d.inbuf)), &numCh, &outputs, &ns)
-			d.inbuf = d.inbuf[used:]
-			if 0 < used {
-				if ns == 0 {
-					// seek/error
-					return 0, nil
-				}
-				left := C.floatPPIndex(outputs, 0)
-				right := C.floatPPIndex(outputs, 0)
-				if numCh > 1 {
-					right = C.floatPPIndex(outputs, 1)
-				}
-				l := cFloatsToSlice(left, int(ns))
-				r := cFloatsToSlice(right, int(ns))
-				out := &bytes.Buffer{}
-				for i := 0; i < int(ns); i++ {
-					l := int16(l[i] * math.MaxInt16)
-					r := int16(r[i] * math.MaxInt16)
-					if err := binary.Write(out, binary.LittleEndian, []int16{l, r}); err != nil {
-						return 0, err
-					}
-				}
-				d.outbuf = append(d.outbuf, out.Bytes()...)
-			}
-		}
-		if err != nil {
-			if err != io.EOF {
-				return 0, err
-			}
+	if !d.ineof {
+		tmp := make([]byte, bufferSize)
+		n, err := d.in.Read(tmp)
+		d.inbuf = append(d.inbuf, tmp[:n]...)
+		if err == io.EOF {
 			d.ineof = true
 		}
+		if err != nil && err != io.EOF {
+			return 0, err
+		}
 	}
-	copy(out, d.outbuf)
-	nread := len(d.outbuf)
-	if len(out) < len(d.outbuf) {
-		nread = len(out)
+
+	ns := C.int(0)
+	outputs := (**C.float)(nil)
+	numCh := C.int(0)
+	used := C.stb_vorbis_decode_frame_pushdata(d.v, (*C.uchar)(&d.inbuf[0]), C.int(len(d.inbuf)), &numCh, &outputs, &ns)
+	d.inbuf = d.inbuf[used:]
+	if 0 < used {
+		if ns == 0 {
+			// seek/error
+			return 0, nil
+		}
+		left := C.floatPPIndex(outputs, 0)
+		right := C.floatPPIndex(outputs, 0)
+		if numCh > 1 {
+			right = C.floatPPIndex(outputs, 1)
+		}
+		l := cFloatsToSlice(left, int(ns))
+		r := cFloatsToSlice(right, int(ns))
+		out := &bytes.Buffer{}
+		for i := 0; i < int(ns); i++ {
+			l := int16(l[i] * math.MaxInt16)
+			r := int16(r[i] * math.MaxInt16)
+			if err := binary.Write(out, binary.LittleEndian, []int16{l, r}); err != nil {
+				return 0, err
+			}
+		}
+		d.outbuf = append(d.outbuf, out.Bytes()...)
 	}
-	d.outbuf = d.outbuf[nread:]
+
+	ncopied := copy(out, d.outbuf)
+	d.outbuf = d.outbuf[ncopied:]
 	if !d.ineof || 0 < len(d.inbuf) {
-		return nread, nil
+		return ncopied, nil
 	}
-	return nread, io.EOF
+	return ncopied, io.EOF
 }
 
 func (d *decoder) Close() error {
