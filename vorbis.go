@@ -5468,7 +5468,10 @@ func (d *decoder) Read(out []byte) (int, error) {
 
 	ncopied := copy(out, d.outbuf)
 	d.outbuf = d.outbuf[ncopied:]
-	if !d.ineof || 0 < len(d.inbuf) {
+	if !d.ineof {
+		return ncopied, nil
+	}
+	if 0 < len(d.inbuf) && 0 < used {
 		return ncopied, nil
 	}
 	return ncopied, io.EOF
