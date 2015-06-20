@@ -50,29 +50,6 @@ import (
 //   - cannot concatenate multiple vorbis streams
 //   - sample positions are 32-bit, limiting seekable 192Khz
 //       files to around 6 hours (Ogg supports 64-bit)
-//
-// Bugfix/warning contributors:
-//    Terje Mathisen     Niklas Frykholm     Andy Hill
-//    Casey Muratori     John Bolton         Gargaj
-//    Laurent Gomila     Marc LeBlanc        Ronny Chevalier
-//    Bernhard Wodo      Evan Balster			"alxprd"@github
-//    Tom Beaumont       Ingo Leitgeb        Nicolas Guillemot
-// (If you reported a bug but do not appear in this list, it is because
-// someone else reported the bug before you. There were too many of you to
-// list them all because I was lax about updating for a long time, sorry.)
-//
-// Partial history:
-//    1.05    - 2015/04/19 - don't define __forceinline if it's redundant
-//    1.04    - 2014/08/27 - fix missing const-correct case in API
-//    1.03    - 2014/08/07 - warning fixes
-//    1.02    - 2014/07/09 - declare qsort comparison as explicitly _cdecl in Windows
-//    1.01    - 2014/06/18 - fix stb_vorbis_get_samples_float (interleaved was correct)
-//    1.0     - 2014/05/26 - fix memory leaks; fix warnings; fix bugs in >2-channel;
-//                           (API change) report sample rate for decode-full-file funcs
-//    0.99996 -            - bracket #include <malloc.h> for macintosh compilation
-//    0.99995 -            - avoid alias-optimization issue in float-to-int conversion
-//
-// See end of file for full version history.
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -586,14 +563,6 @@ enum STBVorbisError
 #define NULL 0
 #endif
 
-#if !defined(_MSC_VER) && !(defined(__MINGW32__) && defined(__forceinline))
-   #if __GNUC__
-      #define __forceinline inline
-   #else
-      #define __forceinline
-   #endif
-#endif
-
 #if STB_VORBIS_MAX_CHANNELS > 256
 #error "Value of STB_VORBIS_MAX_CHANNELS outside of allowed range"
 #endif
@@ -970,7 +939,7 @@ static void crc32_init(void)
    }
 }
 
-static __forceinline uint32 crc32_update(uint32 crc, uint8 byte)
+static inline uint32 crc32_update(uint32 crc, uint8 byte)
 {
    return (crc << 8) ^ crc_table[byte ^ (crc >> 24)];
 }
@@ -1587,7 +1556,7 @@ static uint32 get_bits(vorb *f, int n)
 // expand the buffer to as many bits as possible without reading off end of packet
 // it might be nice to allow f->valid_bits and f->acc to be stored in registers,
 // e.g. cache them locally and decode locally
-static __forceinline void prep_huffman(vorb *f)
+static inline void prep_huffman(vorb *f)
 {
    if (f->valid_bits <= 24) {
       if (f->valid_bits == 0) f->acc = 0;
@@ -2071,7 +2040,7 @@ static float inverse_db_table[256] =
 int8 integer_divide_table[DIVTAB_NUMER][DIVTAB_DENOM]; // 2KB
 #endif
 
-static __forceinline void draw_line(float *output, int x0, int y0, int x1, int y1, int n)
+static inline void draw_line(float *output, int x0, int y0, int x1, int y1, int n)
 {
    int dy = y1 - y0;
    int adx = x1 - x0;
@@ -2628,7 +2597,7 @@ static void imdct_step3_inner_s_loop(int n, float *e, int i_off, int k_off, floa
    }
 }
 
-static __forceinline void iter_54(float *z)
+static inline void iter_54(float *z)
 {
    float k00,k11,k22,k33;
    float y0,y1,y2,y3;
