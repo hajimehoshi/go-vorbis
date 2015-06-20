@@ -15,18 +15,19 @@
 package vorbis_test
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/hajimehoshi/go-vorbis"
 )
 
-func TestDecodeMemory(t *testing.T) {
-	data, err := ioutil.ReadFile("testdata/punch.ogg")
+func TestDecode(t *testing.T) {
+	file, err := os.Open("testdata/punch.ogg")
 	if err != nil {
 		panic(err)
 	}
-	out, err := vorbis.DecodeMemory(data)
+	defer file.Close()
+	out, err := vorbis.Decode(file)
 	if err != nil {
 		panic(err)
 	}
