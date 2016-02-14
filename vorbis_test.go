@@ -27,9 +27,15 @@ func TestDecode(t *testing.T) {
 		panic(err)
 	}
 	defer file.Close()
-	out, err := vorbis.Decode(file)
+	out, ch, sampleRate, err := vorbis.Decode(file)
 	if err != nil {
 		panic(err)
+	}
+	if ch != 2 {
+		t.Errorf("channel number must be 2 but %d", ch)
+	}
+	if sampleRate != 44100 {
+		t.Errorf("sample rate must be 44100 but %d", ch)
 	}
 	_ = out
 }

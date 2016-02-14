@@ -5530,8 +5530,9 @@ func (d *decoder) Close() error {
 }
 
 // Decode accepts an ogg stream and returns a decorded stream.
-// The decorded format is 2-channel interleaved littleendian int16 values.
-func Decode(in io.Reader) (io.ReadCloser, error) {
+// This returns stream IO object, number of channels, sample rate and error if needed.
+// The decorded format is 1 or 2-channel interleaved littleendian int16 values.
+func Decode(in io.Reader) (io.ReadCloser, int, int, error) {
 	d := &decoder{
 		in:     in,
 		inbuf:  []byte{},
@@ -5555,17 +5556,17 @@ func Decode(in io.Reader) (io.ReadCloser, error) {
 			if error == C.VORBIS_need_more_data {
 				continue
 			}
-			return nil, fmt.Errorf("go-vorbis: Error %d", error)
+			return nil, 0, 0, fmt.Errorf("go-vorbis: Error %d", error)
 		}
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
 	}
 	if d.v == nil {
-		return nil, errors.New("go-vorbis: initializing failed")
+		return nil, 0, 0, errors.New("go-vorbis: initializing failed")
 	}
-	return d, nil
+	return d, int(d.v.channels), int(d.v.sample_rate), nil
 }
