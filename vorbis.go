@@ -5484,8 +5484,11 @@ func (d *decoder) Read(out []byte) (int, error) {
 	ns := C.int(0)
 	outputs := (**C.float)(nil)
 	numCh := C.int(0)
-	used := C.stb_vorbis_decode_frame_pushdata(d.v, (*C.uchar)(&d.inbuf[0]), C.int(len(d.inbuf)), &numCh, &outputs, &ns)
-	d.inbuf = d.inbuf[used:]
+	used := C.int(0)
+	if 0 < len(d.inbuf) {
+		used = C.stb_vorbis_decode_frame_pushdata(d.v, (*C.uchar)(&d.inbuf[0]), C.int(len(d.inbuf)), &numCh, &outputs, &ns)
+		d.inbuf = d.inbuf[used:]
+	}
 	if 0 < used {
 		if ns == 0 {
 			// seek/error
@@ -5514,7 +5517,7 @@ func (d *decoder) Read(out []byte) (int, error) {
 	if !d.ineof {
 		return ncopied, nil
 	}
-	if 0 < len(d.inbuf) && 0 < used {
+	if 0 < len(d.inbuf) || 0 < len(d.outbuf) {
 		return ncopied, nil
 	}
 	return ncopied, io.EOF
@@ -5536,15 +5539,17 @@ func Decode(in io.Reader) (io.ReadCloser, error) {
 	}
 	runtime.SetFinalizer(d, (*decoder).Close)
 	for {
-		used := C.int(0)
-		error := C.int(0)
 		tmp := make([]byte, bufferSize)
 		n, err := in.Read(tmp)
 		if 0 < n {
 			d.inbuf = append(d.inbuf, tmp[:n]...)
+		}
+		if 0 < len(d.inbuf) {
+			used := C.int(0)
+			error := C.int(0)
 			d.v = C.stb_vorbis_open_pushdata((*C.uchar)(&d.inbuf[0]), C.int(len(d.inbuf)), &used, &error, nil)
+			d.inbuf = d.inbuf[used:]
 			if d.v != nil {
-				d.inbuf = d.inbuf[used:]
 				break
 			}
 			if error == C.VORBIS_need_more_data {
