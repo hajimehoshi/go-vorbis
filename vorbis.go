@@ -28,6 +28,10 @@ import (
 
 /*
 
+#ifdef __GNUC__
+#cgo LDFLAGS: -lm
+#endif
+
 // Copied from stb_vorbis.c (https://github.com/nothings/stb/blob/79f29bafffdbf33cb566102b1635c144beba0f28/stb_vorbis.c)
 
 // Ogg Vorbis audio decoder - v1.07 - public domain
