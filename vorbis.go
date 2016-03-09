@@ -15,8 +15,6 @@
 package vorbis
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -5505,15 +5503,16 @@ func (d *decoder) Read(out []byte) (int, error) {
 		}
 		l := cFloatsToSlice(left, int(ns))
 		r := cFloatsToSlice(right, int(ns))
-		out := &bytes.Buffer{}
+		out := make([]byte, int(ns) * 4)
 		for i := 0; i < int(ns); i++ {
 			l := int16(l[i] * math.MaxInt16)
 			r := int16(r[i] * math.MaxInt16)
-			if err := binary.Write(out, binary.LittleEndian, []int16{l, r}); err != nil {
-				return 0, err
-			}
+			out[4*i] = uint8(l)
+			out[4*i+1] = uint8(l >> 8)
+			out[4*i+2] = uint8(r)
+			out[4*i+3] = uint8(r >> 8)
 		}
-		d.outbuf = append(d.outbuf, out.Bytes()...)
+		d.outbuf = append(d.outbuf, out...)
 	}
 
 	ncopied := copy(out, d.outbuf)
