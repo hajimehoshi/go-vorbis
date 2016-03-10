@@ -33,6 +33,7 @@ extern double go_log(double x);
 extern double go_pow(double x, double y);
 extern double go_cos(double x);
 extern double go_sin(double x);
+extern void go_assert(int x, char* sentence);
 
 static inline double ldexp(double x, int n) {
   return go_ldexp(x, n);
@@ -61,6 +62,13 @@ static inline double cos(double x) {
 static inline double sin(double x) {
   return go_sin(x);
 }
+
+static inline void assert_impl(int x, const char* sentence) {
+  // const cast
+  go_assert(x, (char*)sentence);
+}
+
+#define assert(x) assert_impl(x, #x)
 
 // Copied from stb_vorbis.c (https://github.com/nothings/stb/blob/79f29bafffdbf33cb566102b1635c144beba0f28/stb_vorbis.c)
 // Fixes:
@@ -617,7 +625,6 @@ enum STBVorbisError
 #ifndef STB_VORBIS_NO_CRT
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #if !(defined(__APPLE__) || defined(MACOSX) || defined(macintosh) || defined(Macintosh))
 #include <malloc.h>
 #endif
@@ -5518,6 +5525,15 @@ func go_cos(x C.double) C.double {
 //export go_sin
 func go_sin(x C.double) C.double {
 	return C.double(math.Sin(float64(x)))
+}
+
+//export go_assert
+func go_assert(x C.int, sentence *C.char) {
+	if x != 0 {
+		return
+	}
+	str := C.GoString(sentence)
+	panic(fmt.Sprintf("go-vorbis: assertion error: %s", str))
 }
 
 func cFloatsToSlice(p *C.float, n int) []float32 {
