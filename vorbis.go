@@ -64,7 +64,8 @@ static inline double sin(double x) {
 
 // Copied from stb_vorbis.c (https://github.com/nothings/stb/blob/79f29bafffdbf33cb566102b1635c144beba0f28/stb_vorbis.c)
 // Fixes:
-// * Replace 'extern' with 'static'
+// * Replace all 'extern's with 'static'
+// * Replace 'uint8' with 'unsigned char' in stb_vorbis_decode_frame_pushdata
 
 // Ogg Vorbis audio decoder - v1.07 - public domain
 // http://nothings.org/stb_vorbis/
@@ -4461,7 +4462,7 @@ static int vorbis_search_for_page_pushdata(vorb *f, uint8 *data, int data_len)
 // return value: number of bytes we used
 int stb_vorbis_decode_frame_pushdata(
          stb_vorbis *f,                   // the file we're decoding
-         const uint8 *data, int data_len, // the memory available for decoding
+         const unsigned char *data, int data_len, // the memory available for decoding
          int *channels,                   // place to write number of float * buffers
          float ***output,                 // place to write float ** array of float * buffers
          int *samples                     // place to write number of output samples
