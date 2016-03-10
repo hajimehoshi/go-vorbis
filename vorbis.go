@@ -26,9 +26,45 @@ import (
 
 /*
 
-#cgo linux LDFLAGS: -lm
+extern double go_ldexp(double x, int n);
+extern double go_floor(double x);
+extern double go_exp(double x);
+extern double go_log(double x);
+extern double go_pow(double x, double y);
+extern double go_cos(double x);
+extern double go_sin(double x);
+
+static inline double ldexp(double x, int n) {
+  return go_ldexp(x, n);
+}
+
+static inline double floor(double x) {
+  return go_floor(x);
+}
+
+static inline double exp(double x) {
+  return go_exp(x);
+}
+
+static inline double log(double x) {
+  return go_log(x);
+}
+
+static inline double pow(double x, double y) {
+  return go_pow(x, y);
+}
+
+static inline double cos(double x) {
+  return go_cos(x);
+}
+
+static inline double sin(double x) {
+  return go_sin(x);
+}
 
 // Copied from stb_vorbis.c (https://github.com/nothings/stb/blob/79f29bafffdbf33cb566102b1635c144beba0f28/stb_vorbis.c)
+// Fixes:
+// * Replace 'extern' with 'static'
 
 // Ogg Vorbis audio decoder - v1.07 - public domain
 // http://nothings.org/stb_vorbis/
@@ -156,24 +192,24 @@ typedef struct
 } stb_vorbis_info;
 
 // get general information about the file
-extern stb_vorbis_info stb_vorbis_get_info(stb_vorbis *f);
+static stb_vorbis_info stb_vorbis_get_info(stb_vorbis *f);
 
 // get the last error detected (clears it, too)
-extern int stb_vorbis_get_error(stb_vorbis *f);
+static int stb_vorbis_get_error(stb_vorbis *f);
 
 // close an ogg vorbis file and free all memory in use
-extern void stb_vorbis_close(stb_vorbis *f);
+static void stb_vorbis_close(stb_vorbis *f);
 
 // this function returns the offset (in samples) from the beginning of the
 // file that will be returned by the next decode, if it is known, or -1
 // otherwise. after a flush_pushdata() call, this may take a while before
 // it becomes valid again.
 // NOT WORKING YET after a seek with PULLDATA API
-extern int stb_vorbis_get_sample_offset(stb_vorbis *f);
+static int stb_vorbis_get_sample_offset(stb_vorbis *f);
 
 // returns the current seek point within the file, or offset from the beginning
 // of the memory buffer. In pushdata mode it returns 0.
-extern unsigned int stb_vorbis_get_file_offset(stb_vorbis *f);
+static unsigned int stb_vorbis_get_file_offset(stb_vorbis *f);
 
 ///////////   PUSHDATA API
 
@@ -186,7 +222,7 @@ extern unsigned int stb_vorbis_get_file_offset(stb_vorbis *f);
 // need to give it the same data again PLUS more. Note that the Vorbis
 // specification does not bound the size of an individual frame.
 
-extern stb_vorbis *stb_vorbis_open_pushdata(
+static stb_vorbis *stb_vorbis_open_pushdata(
          const unsigned char * datablock, int datablock_length_in_bytes,
          int *datablock_memory_consumed_in_bytes,
          int *error,
@@ -200,7 +236,7 @@ extern stb_vorbis *stb_vorbis_open_pushdata(
 // if returns NULL and *error is VORBIS_need_more_data, then the input block was
 //       incomplete and you need to pass in a larger block from the start of the file
 
-extern int stb_vorbis_decode_frame_pushdata(
+static int stb_vorbis_decode_frame_pushdata(
          stb_vorbis *f,
          const unsigned char *datablock, int datablock_length_in_bytes,
          int *channels,             // place to write number of float * buffers
@@ -230,7 +266,7 @@ extern int stb_vorbis_decode_frame_pushdata(
 // the first channel, and (*output)[1][0] contains the first sample from
 // the second channel.
 
-extern void stb_vorbis_flush_pushdata(stb_vorbis *f);
+static void stb_vorbis_flush_pushdata(stb_vorbis *f);
 // inform stb_vorbis that your next datablock will not be contiguous with
 // previous ones (e.g. you've seeked in the data); future attempts to decode
 // frames will cause stb_vorbis to resynchronize (as noted above), and
@@ -255,28 +291,28 @@ extern void stb_vorbis_flush_pushdata(stb_vorbis *f);
 // just want to go ahead and use pushdata.)
 
 #if !defined(STB_VORBIS_NO_STDIO) && !defined(STB_VORBIS_NO_INTEGER_CONVERSION)
-extern int stb_vorbis_decode_filename(const char *filename, int *channels, int *sample_rate, short **output);
+static int stb_vorbis_decode_filename(const char *filename, int *channels, int *sample_rate, short **output);
 #endif
 #if !defined(STB_VORBIS_NO_INTEGER_CONVERSION)
-extern int stb_vorbis_decode_memory(const unsigned char *mem, int len, int *channels, int *sample_rate, short **output);
+static int stb_vorbis_decode_memory(const unsigned char *mem, int len, int *channels, int *sample_rate, short **output);
 #endif
 // decode an entire file and output the data interleaved into a malloc()ed
 // buffer stored in *output. The return value is the number of samples
 // decoded, or -1 if the file could not be opened or was not an ogg vorbis file.
 // When you're done with it, just free() the pointer returned in *output.
 
-extern stb_vorbis * stb_vorbis_open_memory(const unsigned char *data, int len,
+static stb_vorbis * stb_vorbis_open_memory(const unsigned char *data, int len,
                                   int *error, const stb_vorbis_alloc *alloc_buffer);
 // create an ogg vorbis decoder from an ogg vorbis stream in memory (note
 // this must be the entire stream!). on failure, returns NULL and sets *error
 
 #ifndef STB_VORBIS_NO_STDIO
-extern stb_vorbis * stb_vorbis_open_filename(const char *filename,
+static stb_vorbis * stb_vorbis_open_filename(const char *filename,
                                   int *error, const stb_vorbis_alloc *alloc_buffer);
 // create an ogg vorbis decoder from a filename via fopen(). on failure,
 // returns NULL and sets *error (possibly to VORBIS_file_open_failure).
 
-extern stb_vorbis * stb_vorbis_open_file(FILE *f, int close_handle_on_close,
+static stb_vorbis * stb_vorbis_open_file(FILE *f, int close_handle_on_close,
                                   int *error, const stb_vorbis_alloc *alloc_buffer);
 // create an ogg vorbis decoder from an open FILE *, looking for a stream at
 // the _current_ seek point (ftell). on failure, returns NULL and sets *error.
@@ -286,7 +322,7 @@ extern stb_vorbis * stb_vorbis_open_file(FILE *f, int close_handle_on_close,
 // owns the _entire_ rest of the file after the start point. Use the next
 // function, stb_vorbis_open_file_section(), to limit it.
 
-extern stb_vorbis * stb_vorbis_open_file_section(FILE *f, int close_handle_on_close,
+static stb_vorbis * stb_vorbis_open_file_section(FILE *f, int close_handle_on_close,
                 int *error, const stb_vorbis_alloc *alloc_buffer, unsigned int len);
 // create an ogg vorbis decoder from an open FILE *, looking for a stream at
 // the _current_ seek point (ftell); the stream will be of length 'len' bytes.
@@ -295,8 +331,8 @@ extern stb_vorbis * stb_vorbis_open_file_section(FILE *f, int close_handle_on_cl
 // confused.
 #endif
 
-extern int stb_vorbis_seek_frame(stb_vorbis *f, unsigned int sample_number);
-extern int stb_vorbis_seek(stb_vorbis *f, unsigned int sample_number);
+static int stb_vorbis_seek_frame(stb_vorbis *f, unsigned int sample_number);
+static int stb_vorbis_seek(stb_vorbis *f, unsigned int sample_number);
 // these functions seek in the Vorbis file to (approximately) 'sample_number'.
 // after calling seek_frame(), the next call to get_frame_*() will include
 // the specified sample. after calling stb_vorbis_seek(), the next call to
@@ -304,14 +340,14 @@ extern int stb_vorbis_seek(stb_vorbis *f, unsigned int sample_number);
 // do not need to seek to EXACTLY the target sample when using get_samples_*,
 // you can also use seek_frame().
 
-extern void stb_vorbis_seek_start(stb_vorbis *f);
+static void stb_vorbis_seek_start(stb_vorbis *f);
 // this function is equivalent to stb_vorbis_seek(f,0)
 
-extern unsigned int stb_vorbis_stream_length_in_samples(stb_vorbis *f);
-extern float        stb_vorbis_stream_length_in_seconds(stb_vorbis *f);
+static unsigned int stb_vorbis_stream_length_in_samples(stb_vorbis *f);
+static float        stb_vorbis_stream_length_in_seconds(stb_vorbis *f);
 // these functions return the total length of the vorbis stream
 
-extern int stb_vorbis_get_frame_float(stb_vorbis *f, int *channels, float ***output);
+static int stb_vorbis_get_frame_float(stb_vorbis *f, int *channels, float ***output);
 // decode the next frame and return the number of samples. the number of
 // channels returned are stored in *channels (which can be NULL--it is always
 // the same as the number of channels reported by get_info). *output will
@@ -322,8 +358,8 @@ extern int stb_vorbis_get_frame_float(stb_vorbis *f, int *channels, float ***out
 // and stb_vorbis_get_samples_*(), since the latter calls the former.
 
 #ifndef STB_VORBIS_NO_INTEGER_CONVERSION
-extern int stb_vorbis_get_frame_short_interleaved(stb_vorbis *f, int num_c, short *buffer, int num_shorts);
-extern int stb_vorbis_get_frame_short            (stb_vorbis *f, int num_c, short **buffer, int num_samples);
+static int stb_vorbis_get_frame_short_interleaved(stb_vorbis *f, int num_c, short *buffer, int num_shorts);
+static int stb_vorbis_get_frame_short            (stb_vorbis *f, int num_c, short **buffer, int num_samples);
 #endif
 // decode the next frame and return the number of *samples* per channel.
 // Note that for interleaved data, you pass in the number of shorts (the
@@ -350,16 +386,16 @@ extern int stb_vorbis_get_frame_short            (stb_vorbis *f, int num_c, shor
 //    Note that this is not _good_ surround etc. mixing at all! It's just so
 //    you get something useful.
 
-extern int stb_vorbis_get_samples_float_interleaved(stb_vorbis *f, int channels, float *buffer, int num_floats);
-extern int stb_vorbis_get_samples_float(stb_vorbis *f, int channels, float **buffer, int num_samples);
+static int stb_vorbis_get_samples_float_interleaved(stb_vorbis *f, int channels, float *buffer, int num_floats);
+static int stb_vorbis_get_samples_float(stb_vorbis *f, int channels, float **buffer, int num_samples);
 // gets num_samples samples, not necessarily on a frame boundary--this requires
 // buffering so you have to supply the buffers. DOES NOT APPLY THE COERCION RULES.
 // Returns the number of samples stored per channel; it may be less than requested
 // at the end of the file. If there are no more samples in the file, returns 0.
 
 #ifndef STB_VORBIS_NO_INTEGER_CONVERSION
-extern int stb_vorbis_get_samples_short_interleaved(stb_vorbis *f, int channels, short *buffer, int num_shorts);
-extern int stb_vorbis_get_samples_short(stb_vorbis *f, int channels, short **buffer, int num_samples);
+static int stb_vorbis_get_samples_short_interleaved(stb_vorbis *f, int channels, short *buffer, int num_shorts);
+static int stb_vorbis_get_samples_short(stb_vorbis *f, int channels, short **buffer, int num_samples);
 #endif
 // gets num_samples samples, not necessarily on a frame boundary--this requires
 // buffering so you have to supply the buffers. Applies the coercion rules above
@@ -581,7 +617,6 @@ enum STBVorbisError
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <math.h>
 #if !(defined(__APPLE__) || defined(MACOSX) || defined(macintosh) || defined(Macintosh))
 #include <malloc.h>
 #endif
@@ -2456,9 +2491,9 @@ typedef struct
   float scale;
 } mdct_lookup;
 
-extern void mdct_init(mdct_lookup *lookup, int n);
-extern void mdct_clear(mdct_lookup *l);
-extern void mdct_backward(mdct_lookup *init, float *in, float *out);
+static void mdct_init(mdct_lookup *lookup, int n);
+static void mdct_clear(mdct_lookup *l);
+static void mdct_backward(mdct_lookup *init, float *in, float *out);
 
 mdct_lookup M1,M2;
 
@@ -5444,10 +5479,45 @@ int stb_vorbis_get_samples_float(stb_vorbis *f, int channels, float **buffer, in
 
 #endif // STB_VORBIS_HEADER_ONLY
 
-float* floatPPIndex(float** p, int i) { return p[i]; }
+static inline float* floatPPIndex(float** p, int i) { return p[i]; }
 
 */
 import "C"
+
+//export go_ldexp
+func go_ldexp(x C.double, n C.int) C.double {
+	return C.double(math.Ldexp(float64(x), int(n)))
+}
+
+//export go_floor
+func go_floor(x C.double) C.double {
+	return C.double(math.Floor(float64(x)))
+}
+
+//export go_exp
+func go_exp(x C.double) C.double {
+	return C.double(math.Exp(float64(x)))
+}
+
+//export go_log
+func go_log(x C.double) C.double {
+	return C.double(math.Log(float64(x)))
+}
+
+//export go_pow
+func go_pow(x, y C.double) C.double {
+	return C.double(math.Pow(float64(x), float64(y)))
+}
+
+//export go_cos
+func go_cos(x C.double) C.double {
+	return C.double(math.Cos(float64(x)))
+}
+
+//export go_sin
+func go_sin(x C.double) C.double {
+	return C.double(math.Sin(float64(x)))
+}
 
 func cFloatsToSlice(p *C.float, n int) []float32 {
 	s := reflect.SliceHeader{
